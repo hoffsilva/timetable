@@ -29,6 +29,15 @@ public class EventListViewController: UIViewController, UIViewControllerTransiti
     
     var cell: EventCell?
     
+    private lazy var addEventButton: UIButton = {
+        let button = UIButton()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle("Add Event", for: .normal)
+        button.setTitleColor(.red, for: .normal)
+        button.titleLabel?.font = .rubikBold(20)
+        return button
+    }()
+    
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.requestAccess()
@@ -41,6 +50,7 @@ public class EventListViewController: UIViewController, UIViewControllerTransiti
         listViewTableView.delegate = self
         listViewTableView.separatorColor = .clear
         setupBindings()
+        setupViews()
     }
     
     private func makeDataSource() -> UITableViewDiffableDataSource<Month, Day> {
@@ -65,6 +75,14 @@ public class EventListViewController: UIViewController, UIViewControllerTransiti
                     self?.delegate?.didLoadDataWithAccessNotGranted()
                 }
             }
+        
+        addEventButton.addTarget(self, action: #selector(didTapToAddEvent), for: .touchUpInside)
+    }
+    
+    func setupViews() {
+        navigationController?.navigationBar.addSubview(addEventButton)
+        addEventButton.centerVertically()
+        addEventButton.pinRight(24)
     }
     
     private func updateDataSource(listOfMonth: [Month]) {
@@ -101,7 +119,9 @@ public class EventListViewController: UIViewController, UIViewControllerTransiti
         return backgroundView
     }
     
-    
+    @objc private func didTapToAddEvent() {
+        print("Add event")
+    }
 }
 
 extension EventListViewController: UITableViewDelegate {
