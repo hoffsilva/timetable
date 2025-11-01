@@ -24,6 +24,7 @@ public final class AppCoordinator: Coordinator {
     public func start() {
         window.makeKeyAndVisible()
 //        showLaunchScreen()
+        // TODO: Temporary implementation.
         window.rootViewController = Resolver.resolve(StartsAtViewController.self)
     }
     
