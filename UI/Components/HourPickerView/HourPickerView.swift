@@ -7,9 +7,8 @@
 
 import UIKit
 
-private enum ScrollDirection {
-    case isGoingToUp
-    case isGoingToDown
+protocol HourPickerViewDelegate: AnyObject {
+    func hourPickerView(_ picker: HourPickerView, didSelectHour hour: String, period: String)
 }
 
 final class HourPickerView: UIView {
@@ -25,7 +24,9 @@ final class HourPickerView: UIView {
     }
     
     private var started = false
-    private var lastContentOffset: CGFloat = 0
+    weak var delegate: HourPickerViewDelegate?
+    private var lastSelectedIndex: Int = -1
+    private var lastPeriod: String = ""
     
     private lazy var collectionView: UICollectionView = {
         let scrollview = UICollectionView(frame: .zero, collectionViewLayout: Layout())
@@ -33,6 +34,7 @@ final class HourPickerView: UIView {
         scrollview.showsVerticalScrollIndicator = false
         scrollview.showsHorizontalScrollIndicator = false
         scrollview.clipsToBounds = false
+        scrollview.decelerationRate = .normal
         scrollview.register(HourPickerViewCell.self, forCellWithReuseIdentifier: String(describing: HourPickerViewCell.self))
         return scrollview
     }()
@@ -46,52 +48,31 @@ final class HourPickerView: UIView {
         return label
     }()
     
-    private let hoursList = [
-        ("12:00", "am"),
-        ("12:30", "am"),
-        ("1:00", "am"),
-        ("1:30", "am"),
-        ("2:00", "am"),
-        ("2:30", "am"),
-        ("3:30", "am"),
-        ("4:00", "am"),
-        ("4:30", "am"),
-        ("5:00", "am"),
-        ("5:30", "am"),
-        ("6:00", "am"),
-        ("6:30", "am"),
-        ("7:00", "am"),
-        ("7:30", "am"),
-        ("8:00", "am"),
-        ("8:30", "am"),
-        ("9:30", "am"),
-        ("10:00", "am"),
-        ("10:30", "am"),
-        ("11:00", "am"),
-        ("11:30", "am"),
-        ("12:00", "pm"),
-        ("12:30", "pm"),
-        ("1:00", "pm"),
-        ("1:30", "pm"),
-        ("2:00", "pm"),
-        ("2:00", "pm"),
-        ("2:30", "pm"),
-        ("3:30", "pm"),
-        ("4:00", "pm"),
-        ("4:30", "pm"),
-        ("5:00", "pm"),
-        ("5:30", "pm"),
-        ("6:00", "pm"),
-        ("6:30", "pm"),
-        ("7:00", "pm"),
-        ("7:30", "pm"),
-        ("8:00", "pm"),
-        ("8:30", "pm"),
-        ("9:30", "pm"),
-        ("10:00", "pm"),
-        ("10:30", "pm"),
-        ("11:00", "pm"),
-        ("11:30", "pm")]
+    private lazy var hoursList: [(String, String)] = {
+        var hours: [(String, String)] = []
+        
+        for hour in 12...12 {
+            hours.append(("\(hour):00", "am"))
+            hours.append(("\(hour):30", "am"))
+        }
+        
+        for hour in 1...11 {
+            hours.append(("\(hour):00", "am"))
+            hours.append(("\(hour):30", "am"))
+        }
+        
+        for hour in 12...12 {
+            hours.append(("\(hour):00", "pm"))
+            hours.append(("\(hour):30", "pm"))
+        }
+        
+        for hour in 1...11 {
+            hours.append(("\(hour):00", "pm"))
+            hours.append(("\(hour):30", "pm"))
+        }
+        
+        return hours
+    }()
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -100,6 +81,7 @@ final class HourPickerView: UIView {
         self.backgroundColor = .timetableSystemBackgroundColor
         collectionView.delegate = self
         collectionView.dataSource = self
+        setupCollectionViewInsets()
     }
     
     required init?(coder: NSCoder) {
@@ -119,6 +101,34 @@ final class HourPickerView: UIView {
         hourPeriodLabel.centerVertically()
         hourPeriodLabel.pinRight()
     }
+    
+    private func setupCollectionViewInsets() {
+        let cellHeight: CGFloat = 62
+        let viewHeight: CGFloat = 116
+        let centerOffset = (viewHeight - cellHeight) / 2 + 6 // 22pt para centralizar melhor
+        
+        collectionView.contentInset = UIEdgeInsets(top: centerOffset, left: 0, bottom: centerOffset, right: 0)
+        collectionView.scrollIndicatorInsets = collectionView.contentInset
+    }
+    
+    func getCurrentSelectedValue() -> (hour: String, period: String)? {
+        let centerPoint = CGPoint(
+            x: collectionView.bounds.midX,
+            y: collectionView.bounds.midY
+        )
+        
+        let centerPointInContent = CGPoint(
+            x: centerPoint.x,
+            y: collectionView.contentOffset.y + centerPoint.y - collectionView.contentInset.top
+        )
+        
+        if let indexPath = collectionView.indexPathForItem(at: centerPointInContent),
+           indexPath.row < hoursList.count {
+            let selectedHour = hoursList[indexPath.row]
+            return (selectedHour.0, selectedHour.1)
+        }
+        return nil
+    }
 
 }
 
@@ -128,11 +138,19 @@ extension HourPickerView: UICollectionViewDataSource {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: String(describing: HourPickerViewCell.self), for: indexPath)
         guard let hourPickerViewCell = cell as? HourPickerViewCell else { return cell }
         if indexPath.row == 0 && !started {
-            hourPickerViewCell.zoomingIn(offset: 30, alpha: 1)
+            hourPickerViewCell.updateZoom(scale: 1.0, alpha: 1.0)
+            lastSelectedIndex = 0
+            lastPeriod = hoursList[indexPath.row].1
+            self.hourPeriodLabel.text = hoursList[indexPath.row].1
             started = true
+            
+            // Notifica que a primeira célula está selecionada
+            DispatchQueue.main.async {
+                let selectedHour = self.hoursList[0]
+                self.delegate?.hourPickerView(self, didSelectHour: selectedHour.0, period: selectedHour.1)
+            }
         }
         hourPickerViewCell.configure(with: hoursList[indexPath.row].0)
-        self.hourPeriodLabel.text = hoursList[indexPath.row].1
         return hourPickerViewCell
     }
     
@@ -153,58 +171,80 @@ extension HourPickerView: UICollectionViewDelegate {
 
 extension HourPickerView: UIScrollViewDelegate {
     
-    private func getScrollDirection(scrolledValue: CGFloat) -> ScrollDirection {
-        var scrollDirection = ScrollDirection.isGoingToDown
-        
-        if (self.lastContentOffset > scrolledValue) {
-            scrollDirection = .isGoingToDown
-        } else if (self.lastContentOffset < scrolledValue) {
-            scrollDirection = .isGoingToUp
-        }
-        
-        self.lastContentOffset = scrolledValue
-        
-        return scrollDirection
-    }
-    
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        
-        let centerPoint = CGPoint(x: self.collectionView.frame.size.width / 2 + scrollView.contentOffset.x,
-                                  y: self.collectionView.frame.size.height / 2 + scrollView.contentOffset.y
-        )
-        
-        if let indexPath = self.collectionView.indexPathForItem(at: centerPoint),
-           let centerCell = collectionView.cellForItem(at: indexPath) as? HourPickerViewCell {
-            print("Meio da celula: \(centerCell.center)")
-            switch getScrollDirection(scrolledValue: scrollView.contentOffset.y) {
-            case .isGoingToDown:
-                print("down")
-                print(centerCell.frame.height)
-                if (indexPath.row < indexPath.row + 1) &&
-                    (indexPath.row <= hoursList.count - 1) &&
-                    centerCell.hourLabel.font.pointSize < 55 &&
-                    !centerCell.isZoomedDown {
-                    centerCell.zoomingIn(offset: 0.48)
-                } else {
-                    centerCell.zoomingOut(offset: 0.49)
-                }
-            case .isGoingToUp:
-                print("up")
-                if (indexPath.row > indexPath.row - 1) &&
-                    (indexPath.row >= 0) &&
-                    centerCell.hourLabel.font.pointSize < 55 &&
-                    !centerCell.isZoomedUp {
-                    centerCell.zoomingIn(offset: 0.48)
-                } else {
-                    centerCell.zoomingOut(offset: 0.49)
-                }
-            }
-        
-        }
-    
+        updateCellsZoomEffect()
+        updateHourPeriodLabel()
     }
     
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        let cellHeight: CGFloat = 62.0
+        let targetY = targetContentOffset.pointee.y + collectionView.contentInset.top
+        let targetRow = round(targetY / cellHeight)
+        let adjustedY = targetRow * cellHeight - collectionView.contentInset.top
+        
+        targetContentOffset.pointee.y = adjustedY
+    }
     
+    private func updateCellsZoomEffect() {
+        let visibleCells = collectionView.visibleCells
+        let collectionViewCenter = CGPoint(x: collectionView.bounds.midX, y: collectionView.bounds.midY)
+        
+        for cell in visibleCells {
+            guard let hourCell = cell as? HourPickerViewCell else { continue }
+            
+            let cellCenter = collectionView.convert(cell.center, to: collectionView)
+            let distance = abs(cellCenter.y - collectionViewCenter.y)
+            let cellHeight: CGFloat = 62.0
+            let maxEffectDistance = cellHeight
+            
+            let normalizedDistance = min(distance / maxEffectDistance, 1.0)
+            let scale = max(0.0, 1.0 - normalizedDistance)
+            let alpha = 0.5 + (scale * 0.5)
+            
+            hourCell.updateZoom(scale: scale, alpha: alpha)
+        }
+    }
+    
+    private func updateHourPeriodLabel() {
+        let cellHeight: CGFloat = 62.0
+        let adjustedOffset = collectionView.contentOffset.y + collectionView.contentInset.top
+        let centerRow = round(adjustedOffset / cellHeight)
+        let selectedIndex = Int(centerRow)
+        
+        if selectedIndex >= 0 && selectedIndex < hoursList.count {
+            let currentPeriod = hoursList[selectedIndex].1
+            // Só atualiza se mudou o período
+            if currentPeriod != lastPeriod {
+                lastPeriod = currentPeriod
+                hourPeriodLabel.text = currentPeriod
+            }
+        }
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        notifySelectedValue()
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            notifySelectedValue()
+        }
+    }
+    
+    private func notifySelectedValue() {
+        let cellHeight: CGFloat = 62.0
+        let adjustedOffset = collectionView.contentOffset.y + collectionView.contentInset.top
+        let centerRow = round(adjustedOffset / cellHeight)
+        let selectedIndex = Int(centerRow)
+        
+        if selectedIndex >= 0 && selectedIndex < hoursList.count {
+            if selectedIndex != lastSelectedIndex {
+                lastSelectedIndex = selectedIndex
+                let selectedHour = hoursList[selectedIndex]
+                delegate?.hourPickerView(self, didSelectHour: selectedHour.0, period: selectedHour.1)
+            }
+        }
+    }
 }
 
 final fileprivate class HourPickerViewCell: UICollectionViewCell {
@@ -219,8 +259,8 @@ final fileprivate class HourPickerViewCell: UICollectionViewCell {
         return label
     }()
     
-    var isZoomedUp = false
-    var isZoomedDown = false
+    private let baseFontSize: CGFloat = 32
+    private let maxFontSize: CGFloat = 52
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -245,7 +285,7 @@ final fileprivate class HourPickerViewCell: UICollectionViewCell {
     
     private func resetLabel() {
         hourLabel.text = nil
-        hourLabel.font = .rubikBold(32)
+        hourLabel.font = .rubikBold(baseFontSize)
         hourLabel.alpha = 0.5
     }
     
@@ -263,28 +303,26 @@ final fileprivate class HourPickerViewCell: UICollectionViewCell {
         hourLabel.text = text
     }
     
+    func updateZoom(scale: CGFloat, alpha: CGFloat) {
+        let fontSize = baseFontSize + (maxFontSize - baseFontSize) * scale
+        let clampedFontSize = max(baseFontSize, min(maxFontSize, fontSize))
+        let clampedAlpha = max(0.5, min(1.0, alpha))
+        
+        self.hourLabel.font = .rubikBold(clampedFontSize)
+        self.hourLabel.alpha = clampedAlpha
+    }
+    
     func zoomingIn(offset: Double, alpha: CGFloat? = nil) {
         let size = self.hourLabel.font.pointSize + offset
-        print("Size: \(size)")
-        self.hourLabel.font = self.hourLabel.font.withSize(size < 52 ? size : 52)
+        self.hourLabel.font = self.hourLabel.font.withSize(size < maxFontSize ? size : maxFontSize)
         if let alpha = alpha { self.hourLabel.alpha = alpha }
         self.hourLabel.alpha += 0.1
-        if self.hourLabel.font.pointSize == 52 {
-            self.isZoomedUp = true
-        } else {
-            self.isZoomedDown = false
-        }
     }
     
     func zoomingOut(offset: Double) {
         let size = self.hourLabel.font.pointSize - offset
-        self.hourLabel.font = self.hourLabel.font.withSize(size > 32 ? size : 32)
+        self.hourLabel.font = self.hourLabel.font.withSize(size > baseFontSize ? size : baseFontSize)
         self.hourLabel.alpha -= self.hourLabel.alpha > 0.5 ? 0.1 : 0
-        if self.hourLabel.font.pointSize == 32 {
-            self.isZoomedDown = false
-        } else {
-            self.isZoomedUp = false
-        }
     }
     
 }

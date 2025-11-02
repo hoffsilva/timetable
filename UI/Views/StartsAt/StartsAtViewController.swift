@@ -38,6 +38,7 @@ public class StartsAtViewController: UIViewController {
         setupBindings()
         setupViewHierarchy()
         setupConstraints()
+        hourPickerView.delegate = self
     }
     
     public override func viewDidAppear(_ animated: Bool) {
@@ -54,10 +55,9 @@ public class StartsAtViewController: UIViewController {
     
     private func setupConstraints() {
         hourPickerView.centerVertically()
-        hourPickerView.height(with: 62)
+        hourPickerView.height(with: 116) // Exatamente 3 células (64+52)
         hourPickerView.pinLeft()
         hourPickerView.pinRight()
-//        hourPickerView.pinEdgesToSuperview()
     }
     
     private func setupBindings() {
@@ -131,25 +131,13 @@ public class StartsAtViewController: UIViewController {
 
 }
 
-extension StartsAtViewController: UIPickerViewDelegate {
-    
-    public func pickerView(_ pickerView: UIPickerView, viewForRow row: Int, forComponent component: Int, reusing view: UIView?) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .red
-        return view
-    }
-    
-}
 
-extension StartsAtViewController: UIPickerViewDataSource {
+extension StartsAtViewController: HourPickerViewDelegate {
     
-    public func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int {
-        10
-    }
-    
-    
-    public func numberOfComponents(in pickerView: UIPickerView) -> Int {
-        1
+    func hourPickerView(_ picker: HourPickerView, didSelectHour hour: String, period: String) {
+        // Valor selecionado: hour = "1:30", period = "am"
+        // Aqui você pode fazer o que quiser com o valor selecionado
+        // Por exemplo, atualizar um ViewModel ou salvar o valor
     }
     
 }
