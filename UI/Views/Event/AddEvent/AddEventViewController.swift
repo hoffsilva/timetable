@@ -95,6 +95,17 @@ class AddEventViewController: UIViewController {
 //            self?.monthCalendar.setCurrentPage(selectedDate, animated: false)
         }
         
+        addEventViewModel?.didSaveEventSuccessfully = { [weak self] eventIdentifier in
+            self?.showAlert(title: "Sucesso", message: "Evento salvo com sucesso!")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                self?.didTapOnCancelButton()
+            }
+        }
+        
+        addEventViewModel?.didGetErrorMessage = { [weak self] errorMessage in
+            self?.showAlert(title: "Erro", message: errorMessage)
+        }
+        
         allDayLabel.text = Localizable.allDayLabelTitle()
         
         customSwitch.delegate = self
@@ -197,10 +208,9 @@ class AddEventViewController: UIViewController {
     }
     
     private func setupSaveEventButton() {
-//        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapOnBackButton))
-//        addEventButton.isUserInteractionEnabled = true
-//        addEventButton.addGestureRecognizer(tap)
-//        addEventButton.addTarget(self, action: #selector(didTapOnCloseButton), for: .touchUpInside)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapOnSaveEventButton))
+        saveEventButton.isUserInteractionEnabled = true
+        saveEventButton.addGestureRecognizer(tap)
     }
     
     @objc private func didTapOnCancelButton() {
@@ -219,6 +229,26 @@ class AddEventViewController: UIViewController {
     
     @objc private func openNote() { print("Note opened") }
     
+    @objc private func didTapOnSaveEventButton() {
+        guard let eventTitle = eventNameTextField.text, !eventTitle.isEmpty else {
+            showAlert(title: "Erro", message: "Por favor, insira um título para o evento")
+            return
+        }
+        
+        addEventViewModel?.saveEvent(
+            title: eventTitle,
+            isAllDay: allDayToggle.isOn,
+            startDate: startDateTextField.text,
+            endDate: endDateTextField.text
+        )
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+    
     deinit {
         print("Bye \(#file)")
     }
@@ -229,11 +259,15 @@ extension AddEventViewController: UITextFieldDelegate {
     
     func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
         switch textField {
-        case startDateTextField: self.addEventViewControllerDelegate?.didTapOnStartField()
-        case endDateTextField: self.addEventViewControllerDelegate?.didTapOnEndField()
-        default: ()
+        case startDateTextField: 
+            self.addEventViewControllerDelegate?.didTapOnStartField()
+            return false // Impede o teclado de abrir
+        case endDateTextField: 
+            self.addEventViewControllerDelegate?.didTapOnEndField()
+            return false // Impede o teclado de abrir
+        default: 
+            return true // Permite edição normal para outros campos
         }
-        return true
     }
     
 }

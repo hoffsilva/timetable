@@ -16,6 +16,7 @@ public final class AddEventViewModel: ObservableObject {
     private let currentDate: Date
     
     public var didGetErrorMessage: ((String)->Void)?
+    public var didSaveEventSuccessfully: ((String)->Void)?
     public var numberOfDay: ((String)->Void)?
     public var nameOfMonth: ((String)->Void)?
     public var nameOfDay: ((String)->Void)?
@@ -36,16 +37,49 @@ public final class AddEventViewModel: ObservableObject {
         selectedDate?(currentDate)
     }
     
-    //    public func loadData() {
-    //        addEventUseCase.addEvent(event, completion: { result in
-    //            switch result {
-    //            case .success(let eventIdentifier):
-    //                print(eventIdentifier) //TODO:
-    //            case .failure(let error):
-    //                self.didGetErrorMessage?(error.localizedDescription)
-    //            }
-    //        })
-    //    }
+    public func saveEvent(title: String, isAllDay: Bool, startDate: String?, endDate: String?, location: String? = nil, note: String? = nil) {
+        let calendar = Calendar.current
+        let startDateTime = parseDate(from: startDate) ?? currentDate
+        let endDateTime = parseDate(from: endDate) ?? calendar.date(byAdding: .hour, value: 1, to: startDateTime) ?? currentDate
+        
+        let event = Event(
+            startDate: startDateTime,
+            endDate: endDateTime,
+            isAllDay: isAllDay,
+            location: location,
+            title: title,
+            year: calendar.component(.year, from: currentDate),
+            day: calendar.component(.day, from: currentDate),
+            acceptanceAnswer: .notAnswered,
+            note: note
+        )
+        
+        addEventUseCase.addEvent(event) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let eventIdentifier):
+                    self?.didSaveEventSuccessfully?(eventIdentifier)
+                case .failure(let error):
+                    self?.didGetErrorMessage?(error.localizedDescription)
+                }
+            }
+        }
+    }
+    
+    private func parseDate(from dateString: String?) -> Date? {
+        guard let dateString = dateString, !dateString.isEmpty else { return nil }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        
+        if let time = formatter.date(from: dateString) {
+            let calendar = Calendar.current
+            let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+            return calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: 0, of: currentDate)
+        }
+        
+        return nil
+    }
     
     deinit {
         print("Bye \(#file)")

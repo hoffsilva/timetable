@@ -11,6 +11,11 @@ import Presentation
 import Domain
 import Data
 
+enum TimeSelectionType {
+    case startTime
+    case endTime
+}
+
 protocol AddEventViewCoordinatorDelegate: AnyObject {
     func cleanCoordinator()
 }
@@ -22,6 +27,7 @@ public final class AddEventViewCoordinator: Coordinator {
     private var transitionOrigin: DetailDayViewController?
     private var addEventViewController: AddEventViewController?
     private var addEventViewModel: AddEventViewModel?
+    private var startsAtViewController: StartsAtViewController?
     private var day: Day
     
     weak var addEventViewCoordinatorDelegate: AddEventViewCoordinatorDelegate?
@@ -56,8 +62,18 @@ public final class AddEventViewCoordinator: Coordinator {
         })
     }
     
-    private func showStartsAtScreen() {
+    private func showStartsAtScreen(for timeType: TimeSelectionType) {
+        let startsAtViewModel = StartsAtViewModel()
+        startsAtViewController = StartsAtViewController.loadFromNib()
+        startsAtViewController?.startsAtViewModel = startsAtViewModel
+        startsAtViewController?.delegate = self
+        startsAtViewController?.overrideUserInterfaceStyle = window.overrideUserInterfaceStyle
+        startsAtViewController?.modalPresentationStyle = .overFullScreen
         
+        // Configurar o tipo de seleção
+        startsAtViewController?.isStartTime = (timeType == .startTime)
+        
+        addEventViewController?.present(startsAtViewController!, animated: true)
     }
     
     deinit {
@@ -72,11 +88,52 @@ extension AddEventViewCoordinator: AddEventViewControllerDelegate {
     }
     
     func didTapOnStartField() {
-        showStartsAtScreen()
+        showStartsAtScreenWithFlow()
     }
     
     func didTapOnEndField() {
-        
+        showStartsAtScreen(for: .endTime)
     }
     
+    private func showStartsAtScreenWithFlow() {
+        let startsAtViewModel = StartsAtViewModel()
+        startsAtViewController = StartsAtViewController.loadFromNib()
+        startsAtViewController?.startsAtViewModel = startsAtViewModel
+        startsAtViewController?.delegate = self
+        startsAtViewController?.overrideUserInterfaceStyle = window.overrideUserInterfaceStyle
+        startsAtViewController?.modalPresentationStyle = .overFullScreen
+        
+        // Configurar para fluxo start → end
+        startsAtViewController?.selectionFlow = .startThenEnd
+        startsAtViewController?.isStartTime = true
+        
+        addEventViewController?.present(startsAtViewController!, animated: true)
+    }
+}
+
+extension AddEventViewCoordinator: StartsAtViewControllerDelegate {
+    public func didTopOnCloseButton() {
+        startsAtViewController?.dismiss(animated: true) {
+            self.startsAtViewController = nil
+        }
+    }
+    
+    public func didTopOnSaveButton() {
+        // Implementaremos depois
+    }
+    
+    public func didSelectTime(_ time: String, isStartTime: Bool) {
+        if isStartTime {
+            addEventViewController?.startDateTextField.text = time
+        } else {
+            addEventViewController?.endDateTextField.text = time
+        }
+        
+        // Só dismiss se não estamos no fluxo startThenEnd ou se acabamos de setar o endTime
+        if startsAtViewController?.selectionFlow != .startThenEnd || !isStartTime {
+            startsAtViewController?.dismiss(animated: true) {
+                self.startsAtViewController = nil
+            }
+        }
+    }
 }
